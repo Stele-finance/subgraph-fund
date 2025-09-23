@@ -3,6 +3,22 @@
     "SteleFund": {
       "address": "0x5f6FF8A3578B8Cf324DF6740dB0CC5F7BE80b246",
       "startBlock": 23423313
+    },
+    "SteleFundInfo": {
+      "address": "0x0A3606cA5b8D0e89dC698E3C607706d0C6cCD42E",
+      "startBlock": 23423311
+    },
+    "SteleFundSetting": {
+      "address": "0x2fA9EAE18d1B6B47ad950404651043258a8c81d2",
+      "startBlock": 23423309
+    },
+    "SteleFundManagerNFT": {
+      "address": "0x6cf04ea314cb567f0e1951f930b84c39cddafcff",
+      "startBlock": 23423339
+    },
+    "SteleFundGovernor": {
+      "address": "0x4fd9C134411a7b55B7a77bBF329ab0ce49eAe53a",
+      "startBlock": 23423298
     }
   }
 }
