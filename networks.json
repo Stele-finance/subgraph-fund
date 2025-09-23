@@ -1,0 +1,8 @@
+{
+  "mainnet": {
+    "SteleFund": {
+      "address": "0x5f6FF8A3578B8Cf324DF6740dB0CC5F7BE80b246",
+      "startBlock": 23423313
+    }
+  }
+}
