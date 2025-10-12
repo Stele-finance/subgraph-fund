@@ -8,9 +8,9 @@ dataSources:
     name: SteleFundSetting
     network: mainnet
     source:
-      address: "0xAFbEf3B2D0eE5bD7fE551b4a633Af476B3333c67"
+      address: "0x650C304b66d8e4eB76d54AeD35A655c7d2Dd7BE6"
       abi: SteleFundSetting
-      startBlock: 23458097
+      startBlock: 23559475
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -52,9 +52,9 @@ dataSources:
     name: SteleFundInfo
     network: mainnet
     source:
-      address: "0x017A08b722EbD89Cc1d58c6C69cBe76fCEa5e0EE"
+      address: "0x8fef1Adf80AeFC547478A4deCD5079EE2F925881"
       abi: SteleFundInfo
-      startBlock: 23458099
+      startBlock: 23559478
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -89,9 +89,9 @@ dataSources:
     name: SteleFund
     network: mainnet
     source:
-      address: "0x2Ac2A044552A185f9d9d5C4cA6d31EA128a522B8"
+      address: "0xBab56c9a56144364ea8FDD6d4B3BD61898Ea9581"
       abi: SteleFund
-      startBlock: 23458101
+      startBlock: 23559480
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -128,9 +128,9 @@ dataSources:
     name: SteleFundManagerNFT
     network: mainnet
     source:
-      address: "0xc991d2da50C86aCFAce1f774746A444258A3fa52"
+      address: "0x6e1aCE9F7A97e29d6F4293ae57F0137f9601C71c"
       abi: SteleFundManagerNFT
-      startBlock: 23458113
+      startBlock: 23559500
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -152,9 +152,9 @@ dataSources:
     name: SteleFundGovernor
     network: mainnet
     source:
-      address: "0x1F5f1c74ccbA1cb3a0AdF918E6538fD494a7Fa6c"
+      address: "0xAe5065AcC35f5Ca16E9D54281e703873a0C81b37"
       abi: SteleFundGovernor
-      startBlock: 23458049
+      startBlock: 23559462
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
