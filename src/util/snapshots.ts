@@ -97,15 +97,16 @@ export function investorSnapshot(
   snapshot.fundId = fundId.toString()
   snapshot.manager = manager
   snapshot.investor = investor
-  // Note: InvestorSnapshot now has share, amountUSD, profitUSD, profitRatio
+  // Note: InvestorSnapshot now has share, investmentUSD, amountUSD, profitUSD, profitRatio
   if (investorEntity.share) {
     snapshot.share = investorEntity.share!
   } else {
     snapshot.share = ZERO_BI
   }
+  snapshot.investmentUSD = investorEntity.investmentUSD
   snapshot.amountUSD = investorEntity.amountUSD
   snapshot.profitUSD = investorEntity.profitUSD
-  snapshot.profitRatio = investorEntity.profitRatio  
+  snapshot.profitRatio = investorEntity.profitRatio
   snapshot.save()
 }
 
@@ -184,17 +185,18 @@ export function investorWeeklySnapshot(
   if (snapshot == null) {
     snapshot = new InvestorWeeklySnapshot(investorID + "-" + weekID.toString())
   }
-  
+
   snapshot.timestamp = event.block.timestamp
   snapshot.fundId = fundId.toString()
   snapshot.manager = manager
   snapshot.investor = investor
-  
+
   if (investorEntity.share) {
     snapshot.share = investorEntity.share!
   } else {
     snapshot.share = ZERO_BI
   }
+  snapshot.investmentUSD = investorEntity.investmentUSD
   snapshot.amountUSD = investorEntity.amountUSD
   snapshot.profitUSD = investorEntity.profitUSD
   snapshot.profitRatio = investorEntity.profitRatio
@@ -276,17 +278,18 @@ export function investorMonthlySnapshot(
   if (snapshot == null) {
     snapshot = new InvestorMonthlySnapshot(investorID + "-" + monthID.toString())
   }
-  
+
   snapshot.timestamp = event.block.timestamp
   snapshot.fundId = fundId.toString()
   snapshot.manager = manager
   snapshot.investor = investor
-  
+
   if (investorEntity.share) {
     snapshot.share = investorEntity.share!
   } else {
     snapshot.share = ZERO_BI
   }
+  snapshot.investmentUSD = investorEntity.investmentUSD
   snapshot.amountUSD = investorEntity.amountUSD
   snapshot.profitUSD = investorEntity.profitUSD
   snapshot.profitRatio = investorEntity.profitRatio

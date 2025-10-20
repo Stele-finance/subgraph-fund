@@ -227,7 +227,8 @@ type Investor @entity(immutable: false) {
   investor: Bytes!
   isManager: Boolean!
   share: BigInt
-  amountUSD: BigDecimal!
+  investmentUSD: BigDecimal! # Total invested amount in USD (cumulative deposits)
+  amountUSD: BigDecimal! # Current value in USD
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
 }
@@ -454,6 +455,7 @@ type InvestorSnapshot @entity(immutable: false) {
   manager: Bytes!
   investor: Bytes!
   share: BigInt!
+  investmentUSD: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -466,6 +468,7 @@ type InvestorWeeklySnapshot @entity(immutable: false) {
   manager: Bytes!
   investor: Bytes!
   share: BigInt!
+  investmentUSD: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -478,6 +481,7 @@ type InvestorMonthlySnapshot @entity(immutable: false) {
   manager: Bytes!
   investor: Bytes!
   share: BigInt!
+  investmentUSD: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!

@@ -135,43 +135,46 @@ export function handleDeposit(event: DepositEvent): void {
     const investorID = getInvestorID(fundId, event.params.investor)
     let investor = Investor.load(investorID)
     if (investor !== null) {
+      // Accumulate investmentUSD with deposit amount
+      investor.investmentUSD = investor.investmentUSD.plus(amountUSD)
+
       // Update investor share from InvestorShare entity
       let investorShare = InvestorShare.load(investorShareId)
       if (investorShare !== null) {
         investor.share = investorShare.share
       }
-      
+
       // Calculate investor's current portfolio based on their share
       let fundInfoContract = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
       let tokensResult = fundInfoContract.try_getFundTokens(fundId)
-      
+
       if (!tokensResult.reverted && fundShare !== null && fundShare.totalShare.gt(ZERO_BI)) {
         let contractTokens = tokensResult.value
         let investorRatio = BigDecimal.fromString(investor.share ? investor.share!.toString() : "0")
           .div(BigDecimal.fromString(fundShare.totalShare.toString()))
-        
+
         let tokens: Array<Bytes> = []
         let tokensSymbols: Array<string> = []
         let tokensDecimals: Array<BigInt> = []
         let tokensAmount: Array<BigDecimal> = []
         let totalAmountUSD = ZERO_BD
-        
+
         for (let i = 0; i < contractTokens.length; i++) {
           let token = contractTokens[i]
           let tokenAddress = Address.fromBytes(token.token)
           let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
-          
+
           if (tokenDecimals !== null) {
             let decimalDivisor = exponentToBigDecimal(tokenDecimals)
             let fundTokenAmount = BigDecimal.fromString(token.amount.toString()).div(decimalDivisor)
             let investorTokenAmount = fundTokenAmount.times(investorRatio)
-            
+
             if (investorTokenAmount.gt(ZERO_BD)) {
               tokens.push(token.token)
               tokensSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
               tokensDecimals.push(tokenDecimals)
               tokensAmount.push(investorTokenAmount)
-              
+
               // Calculate USD value
               let tokenPriceETH = getCachedTokenPriceETH(tokenAddress, event.block.timestamp)
               if (tokenPriceETH !== null) {
@@ -181,22 +184,19 @@ export function handleDeposit(event: DepositEvent): void {
             }
           }
         }
-        
+
         investor.amountUSD = totalAmountUSD
-        
-        // Calculate profit: current USD value - principal (share in USDC raw)
-        if (investor.share && investor.share!.gt(ZERO_BI)) {
-          let principalUSD = BigDecimal.fromString(investor.share!.toString())
-            .div(USDC_DECIMALS) // Convert USDC raw to decimal
-          
-          investor.profitUSD = totalAmountUSD.minus(principalUSD)
-          investor.profitRatio = investor.profitUSD.div(principalUSD)
+
+        // Calculate profit: current USD value - investmentUSD (total invested)
+        if (investor.investmentUSD.gt(ZERO_BD)) {
+          investor.profitUSD = totalAmountUSD.minus(investor.investmentUSD)
+          investor.profitRatio = investor.profitUSD.div(investor.investmentUSD)
         } else {
           investor.profitUSD = ZERO_BD
           investor.profitRatio = ZERO_BD
         }
       }
-      
+
       investor.updatedAtTimestamp = event.block.timestamp
       investor.save()
     }
@@ -522,21 +522,11 @@ export function handleSwap(event: SwapEvent): void {
             }
             
             investor.amountUSD = totalAmountUSD
-            
-            // Calculate profit: current USD value - principal (share in USDC raw)
-            if (investor.share !== null && investor.share!.gt(ZERO_BI)) {
-              // Convert share (USDC raw) to decimal
-              let principalUSD = BigDecimal.fromString(investor.share!.toString())
-                .div(USDC_DECIMALS) // Convert USDC raw to decimal
-              
-              investor.profitUSD = totalAmountUSD.minus(principalUSD)
-              
-              // Calculate profit ratio only if principal > 0
-              if (principalUSD.gt(ZERO_BD)) {
-                investor.profitRatio = investor.profitUSD.div(principalUSD)
-              } else {
-                investor.profitRatio = ZERO_BD
-              }
+
+            // Calculate profit: current USD value - investmentUSD (total invested)
+            if (investor.investmentUSD.gt(ZERO_BD)) {
+              investor.profitUSD = totalAmountUSD.minus(investor.investmentUSD)
+              investor.profitRatio = investor.profitUSD.div(investor.investmentUSD)
             } else {
               investor.profitUSD = ZERO_BD
               investor.profitRatio = ZERO_BD
@@ -609,13 +599,18 @@ export function handleWithdraw(event: WithdrawEvent): void {
   // Update investor share and portfolio
   let investor = Investor.load(investorID)
   if (investor !== null && fundShare !== null) {
+    // Reduce investmentUSD proportionally to withdrawal
+    investor.investmentUSD = investor.investmentUSD.times(
+      BigDecimal.fromString("1").minus(withdrawalPercentage)
+    )
+
     investor.share = event.params.investorShare
     investor.updatedAtTimestamp = event.block.timestamp
-    
+
     // Get actual fund tokens from contract
     let fundInfoContract = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
     let tokensResult = fundInfoContract.try_getFundTokens(fundId)
-    
+
     if (!tokensResult.reverted) {
       let fundTokens = tokensResult.value
       // Calculate investor ratio only if fundShare > 0, otherwise ratio is 0 (full withdrawal)
@@ -623,32 +618,32 @@ export function handleWithdraw(event: WithdrawEvent): void {
         ? BigDecimal.fromString(event.params.investorShare.toString())
             .div(BigDecimal.fromString(event.params.fundShare.toString()))
         : ZERO_BD
-      
+
       // Calculate investor's current portfolio
       let tokens: Array<Bytes> = []
       let tokensSymbols: Array<string> = []
       let tokensDecimals: Array<BigInt> = []
       let tokensAmount: Array<BigDecimal> = []
       let totalCurrentUSD = ZERO_BD
-      
+
       const ethPriceInUSD = getCachedEthPriceUSD(event.block.timestamp)
-      
+
       for (let i = 0; i < fundTokens.length; i++) {
         let token = fundTokens[i]
         let tokenAddress = Address.fromBytes(token.token)
         let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
-        
+
         if (tokenDecimals !== null) {
           let decimalDivisor = exponentToBigDecimal(tokenDecimals)
           let fundTokenAmount = BigDecimal.fromString(token.amount.toString()).div(decimalDivisor)
           let investorTokenAmount = fundTokenAmount.times(investorRatio)
-          
+
           if (investorTokenAmount.gt(ZERO_BD)) {
             tokens.push(token.token)
             tokensSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
             tokensDecimals.push(tokenDecimals)
             tokensAmount.push(investorTokenAmount)
-            
+
             // Calculate ETH and USD value
             let tokenPriceETH = getCachedTokenPriceETH(tokenAddress, event.block.timestamp)
             if (tokenPriceETH !== null) {
@@ -658,29 +653,23 @@ export function handleWithdraw(event: WithdrawEvent): void {
           }
         }
       }
-      
+
       // Update investor's current portfolio
       investor.amountUSD = totalCurrentUSD
-      
+
       // Update investor share
       investor.share = event.params.investorShare
-      
-      // Calculate profit: current USD value - principal (share in USDC raw)
-      // Convert share (USDC raw) to decimal (share is never null here as we just set it)
-      let principalUSD = BigDecimal.fromString(event.params.investorShare.toString())
-        .div(USDC_DECIMALS) // Convert USDC raw to decimal
-                
-      // Calculate profit: current value - principal
-      investor.profitUSD = totalCurrentUSD.minus(principalUSD)
-      
-      // Calculate profit ratio only if principal > 0
-      if (principalUSD.gt(ZERO_BD)) {
-        investor.profitRatio = investor.profitUSD.div(principalUSD)
+
+      // Calculate profit: current USD value - investmentUSD (total invested)
+      if (investor.investmentUSD.gt(ZERO_BD)) {
+        investor.profitUSD = totalCurrentUSD.minus(investor.investmentUSD)
+        investor.profitRatio = investor.profitUSD.div(investor.investmentUSD)
       } else {
+        investor.profitUSD = ZERO_BD
         investor.profitRatio = ZERO_BD
       }
     }
-    
+
     investor.updatedAtTimestamp = event.block.timestamp
     investor.save()
   }
