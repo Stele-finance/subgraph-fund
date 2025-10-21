@@ -16,7 +16,8 @@ import {
   WithdrawFee,
   Investor,
   FundShare,
-  InvestorShare
+  InvestorShare,
+  Info
 } from "../generated/schema"
 import {
   ZERO_BD,
@@ -204,25 +205,27 @@ export function handleDeposit(event: DepositEvent): void {
     // Update fund
     let fund = Fund.load(fundId.toString())
     if (fund !== null) {
+      let previousAmountUSD = fund.amountUSD
+
       // Update share with FundShare totalShare (USDC raw amount)
       fund.share = event.params.fundShare
       fund.amountUSD = fund.amountUSD.plus(amountUSD)
-      
+
       // Calculate Fund profit: current USD value - principal (share is USDC raw)
       if (fund.share.gt(ZERO_BI)) {
         let shareUSD = BigDecimal.fromString(fund.share.toString())
           .div(USDC_DECIMALS) // Convert USDC raw to decimal
-        
+
         // Calculate profit: current value - principal
         fund.profitUSD = fund.amountUSD.minus(shareUSD)
-        
+
         // Calculate profit ratio
         fund.profitRatio = fund.profitUSD.div(shareUSD)
       } else {
         fund.profitUSD = ZERO_BD
         fund.profitRatio = ZERO_BD
       }
-      
+
       fund.updatedAtTimestamp = event.block.timestamp
       
       // Add token to fund if not already present
@@ -293,14 +296,22 @@ export function handleDeposit(event: DepositEvent): void {
           fund.feeTokensAmount = feeAmounts
         }
       }
-      
+
       fund.save()
+
+      // Update Info totalAmountUSD by delta
+      let deltaUSD = fund.amountUSD.minus(previousAmountUSD)
+      let info = Info.load(Bytes.fromHexString(STELE_FUND_INFO_ADDRESS))
+      if (info) {
+        info.totalAmountUSD = info.totalAmountUSD.plus(deltaUSD)
+        info.save()
+      }
     }
 
     // Get manager address for snapshots
     const managerAddressForSnapshot = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
       .try_manager(event.params.fundId)
-    
+
     if (!managerAddressForSnapshot.reverted) {
       infoSnapshot(event)
       infoWeeklySnapshot(event)
@@ -430,10 +441,11 @@ export function handleSwap(event: SwapEvent): void {
     }
 
     // Update ETH and USD values
+    let previousAmountUSD = fund.amountUSD
     const ethPriceInUSD = getCachedEthPriceUSD(event.block.timestamp)
     let totalETH = ZERO_BD
     let totalUSD = ZERO_BD
-    
+
     for (let i = 0; i < fund.tokens.length; i++) {
       let tokenPriceETH = getCachedTokenPriceETH(Address.fromBytes(fund.tokens[i]), event.block.timestamp)
       if (tokenPriceETH !== null) {
@@ -442,27 +454,35 @@ export function handleSwap(event: SwapEvent): void {
         totalUSD = totalUSD.plus(valueETH.times(ethPriceInUSD))
       }
     }
-    
+
     fund.amountUSD = totalUSD
-    
+
     // Calculate Fund profit: current USD value - principal (share in USDC raw)
     if (fund.share.gt(ZERO_BI)) {
       // Convert share (USDC raw) to decimal
       let principalUSD = BigDecimal.fromString(fund.share.toString())
         .div(USDC_DECIMALS) // Convert USDC raw to decimal
-              
+
       // Calculate profit: current value - principal
       fund.profitUSD = fund.amountUSD.minus(principalUSD)
-      
+
       // Calculate profit ratio
       fund.profitRatio = fund.profitUSD.div(principalUSD)
     } else {
       fund.profitUSD = ZERO_BD
       fund.profitRatio = ZERO_BD
     }
-    
+
     fund.updatedAtTimestamp = event.block.timestamp
     fund.save()
+
+    // Update Info totalAmountUSD by delta
+    let deltaUSD = fund.amountUSD.minus(previousAmountUSD)
+    let info = Info.load(Bytes.fromHexString(STELE_FUND_INFO_ADDRESS))
+    if (info) {
+      info.totalAmountUSD = info.totalAmountUSD.plus(deltaUSD)
+      info.save()
+    }
 
     // Update all investors after swap (token composition changed)
     const managerAddress = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
@@ -687,12 +707,14 @@ export function handleWithdraw(event: WithdrawEvent): void {
   
   // Update Fund entity with actual contract data (post-withdrawal)
   if (fund !== null) {
+    let previousAmountUSD = fund.amountUSD
+
     // Update share with FundShare totalShare (USDC raw amount)
     fund.share = event.params.fundShare
     // Get actual fund tokens from contract (post-withdrawal state)
     let fundInfoContract = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
     let tokensResult = fundInfoContract.try_getFundTokens(fundId)
-    
+
     if (!tokensResult.reverted) {
       let contractTokens = tokensResult.value
       let fundCurrentTokens: Array<Bytes> = []
@@ -701,24 +723,24 @@ export function handleWithdraw(event: WithdrawEvent): void {
       let fundCurrentTokensAmount: Array<BigDecimal> = []
       let fundTotalETH = ZERO_BD
       let fundTotalUSD = ZERO_BD
-      
+
       const ethPriceInUSD = getCachedEthPriceUSD(event.block.timestamp)
-      
+
       for (let i = 0; i < contractTokens.length; i++) {
         let token = contractTokens[i]
         let tokenAddress = Address.fromBytes(token.token)
         let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
-        
+
         if (tokenDecimals !== null) {
           let decimalDivisor = exponentToBigDecimal(tokenDecimals)
           let tokenAmount = BigDecimal.fromString(token.amount.toString()).div(decimalDivisor)
-          
+
           if (tokenAmount.gt(ZERO_BD)) {
             fundCurrentTokens.push(token.token)
             fundCurrentTokensSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
             fundCurrentTokensDecimals.push(tokenDecimals)
             fundCurrentTokensAmount.push(tokenAmount)
-            
+
             // Calculate ETH and USD value
             let tokenPriceETH = getCachedTokenPriceETH(tokenAddress, event.block.timestamp)
             if (tokenPriceETH !== null) {
@@ -729,7 +751,7 @@ export function handleWithdraw(event: WithdrawEvent): void {
           }
         }
       }
-      
+
       // Update fund with actual contract data
       fund.tokens = fundCurrentTokens
       fund.tokensSymbols = fundCurrentTokensSymbols
@@ -737,25 +759,33 @@ export function handleWithdraw(event: WithdrawEvent): void {
       fund.tokensAmount = fundCurrentTokensAmount
       fund.amountUSD = fundTotalUSD
     }
-    
+
     // Calculate Fund profit: current USD value - principal (share in USDC raw)
     if (fund.share.gt(ZERO_BI)) {
       // Convert share (USDC raw) to decimal
       let principalUSD = BigDecimal.fromString(fund.share.toString())
         .div(USDC_DECIMALS) // Convert USDC raw to decimal
-              
+
       // Calculate profit: current value - principal
       fund.profitUSD = fund.amountUSD.minus(principalUSD)
-      
+
       // Calculate profit ratio
       fund.profitRatio = fund.profitUSD.div(principalUSD)
     } else {
       fund.profitUSD = ZERO_BD
       fund.profitRatio = ZERO_BD
     }
-    
+
     fund.updatedAtTimestamp = event.block.timestamp
     fund.save()
+
+    // Update Info totalAmountUSD by delta
+    let deltaUSD = fund.amountUSD.minus(previousAmountUSD)
+    let info = Info.load(Bytes.fromHexString(STELE_FUND_INFO_ADDRESS))
+    if (info) {
+      info.totalAmountUSD = info.totalAmountUSD.plus(deltaUSD)
+      info.save()
+    }
   }
   
   // Calculate withdrawn amount USD based on pre-withdrawal tokens
