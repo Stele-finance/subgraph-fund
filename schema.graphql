@@ -500,6 +500,5 @@ type ManagerNFT @entity(immutable: false) {
   returnRate: BigInt! # return rate
   fundCreated: BigInt! # fund creation timestamp
   mintedAt: BigInt! # minting timestamp
-  lastUpdatedAt: BigInt! # last update timestamp
-  transferCount: BigInt! # number of transfers
+  transactionHash: Bytes! # transaction hash
 }

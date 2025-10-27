@@ -4,9 +4,6 @@ import {
 import {
   ManagerNFT
 } from "../generated/schema"
-import {
-  ZERO_BI
-} from './util/constants'
 
 export function handleManagerNFTMinted(event: ManagerNFTMintedEvent): void {
   // Create ManagerNFT state entity
@@ -19,8 +16,7 @@ export function handleManagerNFTMinted(event: ManagerNFTMintedEvent): void {
   managerNFT.currentTVL = event.params.currentTVL
   managerNFT.returnRate = event.params.returnRate
   managerNFT.fundCreated = event.params.fundCreated
-  managerNFT.mintedAt = event.block.timestamp
-  managerNFT.lastUpdatedAt = event.block.timestamp
-  managerNFT.transferCount = ZERO_BI
+  managerNFT.mintedAt = event.block.number
+  managerNFT.transactionHash = event.transaction.hash
   managerNFT.save()
 }

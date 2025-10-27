@@ -563,8 +563,11 @@ export function handleSwap(event: SwapEvent): void {
   // Get manager address for snapshots
   const managerAddressForSnapshot = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
     .try_manager(event.params.fundId)
-  
+    
   if (!managerAddressForSnapshot.reverted) {
+    infoSnapshot(event)
+    infoWeeklySnapshot(event)
+    infoMonthlySnapshot(event)
     fundSnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
     fundWeeklySnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
     fundMonthlySnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
