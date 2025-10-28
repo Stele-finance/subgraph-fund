@@ -571,6 +571,9 @@ export function handleSwap(event: SwapEvent): void {
     fundSnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
     fundWeeklySnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
     fundMonthlySnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
+    investorSnapshot(event.params.fundId, managerAddressForSnapshot.value, event.transaction.from, event)
+    investorWeeklySnapshot(event.params.fundId, managerAddressForSnapshot.value, event.transaction.from, event)
+    investorMonthlySnapshot(event.params.fundId, managerAddressForSnapshot.value, event.transaction.from, event)
   }
 }
 
