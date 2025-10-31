@@ -16,7 +16,7 @@ export function handleManagerNFTMinted(event: ManagerNFTMintedEvent): void {
   managerNFT.currentTVL = event.params.currentTVL
   managerNFT.returnRate = event.params.returnRate
   managerNFT.fundCreated = event.params.fundCreated
-  managerNFT.mintedAt = event.block.number
+  managerNFT.mintedAt = event.params.mintedAt
   managerNFT.transactionHash = event.transaction.hash
   managerNFT.save()
 }
