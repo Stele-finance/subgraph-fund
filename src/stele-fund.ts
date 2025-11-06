@@ -4,6 +4,7 @@ import {
   Swap as SwapEvent,
   Withdraw as WithdrawEvent,
   WithdrawFee as WithdrawFeeEvent,
+  AddToken as AddTokenEvent,
 } from "../generated/SteleFund/SteleFund"
 import {
   SteleFundInfo
@@ -17,7 +18,9 @@ import {
   Investor,
   FundShare,
   InvestorShare,
-  Info
+  Info,
+  InvestableToken,
+  AddToken
 } from "../generated/schema"
 import {
   ZERO_BD,
@@ -911,5 +914,33 @@ export function handleWithdrawFee(event: WithdrawFeeEvent): void {
     }
     
     fund.save()
+  }
+}
+
+export function handleAddToken(event: AddTokenEvent): void {
+  // Create AddToken event entity (missing)
+  let entity = new AddToken(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  )
+  entity.token = event.params.token
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+  entity.save()
+
+  let investableToken = InvestableToken.load(event.params.token)
+  if (!investableToken) {
+    investableToken = new InvestableToken(event.params.token)
+    investableToken.address = event.params.token
+    const tokenDecimals = fetchTokenDecimals(event.params.token, event.block.timestamp)
+    investableToken.decimals = tokenDecimals !== null ? tokenDecimals : BigInt.fromI32(18)
+    investableToken.symbol = fetchTokenSymbol(event.params.token, event.block.timestamp)
+    investableToken.updatedTimestamp = event.block.timestamp
+    investableToken.isInvestable = true
+    investableToken.save()
+  } else {
+    investableToken.updatedTimestamp = event.block.timestamp
+    investableToken.isInvestable = true
+    investableToken.save()
   }
 }

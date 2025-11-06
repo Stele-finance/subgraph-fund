@@ -5,56 +5,12 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum
-    name: SteleFundSetting
-    network: mainnet
-    source:
-      address: "0x2a8F0603708A71267C2eC7Ec4C6a00050F0A537F"
-      abi: SteleFundSetting
-      startBlock: 23566311
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.9
-      language: wasm/assemblyscript
-      entities:
-        - SettingCreated
-        - ManagerFeeChanged
-        - MaxSlippageChanged
-        - MaxTokensChanged
-        - OwnerChanged
-        - AddToken
-        - RemoveToken
-      abis:
-        - name: SteleFundSetting
-          file: ./abis/SteleFundSetting.json
-        - name: ERC20
-          file: ./abis/ERC20.json
-        - name: UniswapV3Factory
-          file: ./abis/UniswapV3Factory.json
-        - name: UniswapV3Pool
-          file: ./abis/UniswapV3Pool.json
-      eventHandlers:
-        - event: SettingCreated()
-          handler: handleSettingCreated
-        - event: ManagerFeeChanged(uint256)
-          handler: handleManagerFeeChanged
-        - event: MaxSlippageChanged(uint256)
-          handler: handleMaxSlippageChanged
-        - event: MaxTokensChanged(uint256)
-          handler: handleMaxTokensChanged
-        - event: OwnerChanged(address,address)
-          handler: handleOwnerChanged
-        - event: AddToken(indexed address)
-          handler: handleAddToken
-        - event: RemoveToken(indexed address)
-          handler: handleRemoveToken
-      file: ./src/stele-fund-setting.ts
-  - kind: ethereum
     name: SteleFundInfo
     network: mainnet
     source:
-      address: "0x331E2988f235471C7b8B4aa991962A72d8C02b5A"
+      address: "0x11220097980b4D42b23B97af64842e8cE95b70ac"
       abi: SteleFundInfo
-      startBlock: 23566313
+      startBlock: 23701480
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -89,9 +45,9 @@ dataSources:
     name: SteleFund
     network: mainnet
     source:
-      address: "0x7D38435F9D78DFc9FDe6E9547C7f96F57D6430d3"
+      address: "0x8a37AC980ceC4c3a4f791147dC1c06983772C3D5"
       abi: SteleFund
-      startBlock: 23566316
+      startBlock: 23701482
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -103,6 +59,7 @@ dataSources:
         - WithdrawFee
         - FundShare
         - InvestorShare
+        - AddToken
       abis:
         - name: SteleFund
           file: ./abis/SteleFund.json
@@ -123,14 +80,16 @@ dataSources:
           handler: handleWithdraw
         - event: WithdrawFee(uint256,indexed address,address,uint256)
           handler: handleWithdrawFee
+        - event: AddToken(indexed address)
+          handler: handleAddToken
       file: ./src/stele-fund.ts
   - kind: ethereum
     name: SteleFundManagerNFT
     network: mainnet
     source:
-      address: "0xfb21a63d4a10b91d408e5b61f38a1fc600aab0b2"
+      address: "0xBe2732dfB5e35684234747f3cED88279495749e5"
       abi: SteleFundManagerNFT
-      startBlock: 23675927
+      startBlock: 23701487
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -148,35 +107,3 @@ dataSources:
         - event: ManagerNFTMinted(indexed uint256,indexed uint256,indexed address,uint256,uint256,int256,uint256,uint256)
           handler: handleManagerNFTMinted
       file: ./src/stele-fund-manager-nft.ts
-  - kind: ethereum
-    name: SteleFundGovernor
-    network: mainnet
-    source:
-      address: "0x9F1e3a2C840d268f9bE9Ce0106498199f95C4D81"
-      abi: SteleFundGovernor
-      startBlock: 23566298
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.9
-      language: wasm/assemblyscript
-      entities:
-        - ProposalCreated
-        - ProposalCanceled
-        - ProposalExecuted
-        - ProposalQueued
-        - VoteCast
-      abis:
-        - name: SteleFundGovernor
-          file: ./abis/SteleFundGovernor.json
-      eventHandlers:
-        - event: ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)
-          handler: handleProposalCreated
-        - event: ProposalCanceled(uint256)
-          handler: handleProposalCanceled
-        - event: ProposalExecuted(uint256)
-          handler: handleProposalExecuted
-        - event: ProposalQueued(uint256,uint256)
-          handler: handleProposalQueued
-        - event: VoteCast(indexed address,uint256,uint8,uint256,string)
-          handler: handleVoteCast
-      file: ./src/stele-fund-governor.ts

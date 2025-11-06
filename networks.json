@@ -1,24 +1,16 @@
 {
   "mainnet": {
     "SteleFund": {
-      "address": "0x7D38435F9D78DFc9FDe6E9547C7f96F57D6430d3",
-      "startBlock": 23566316
+      "address": "0x8a37AC980ceC4c3a4f791147dC1c06983772C3D5",
+      "startBlock": 23701482
     },
     "SteleFundInfo": {
-      "address": "0x331E2988f235471C7b8B4aa991962A72d8C02b5A",
-      "startBlock": 23566313
-    },
-    "SteleFundSetting": {
-      "address": "0x2a8F0603708A71267C2eC7Ec4C6a00050F0A537F",
-      "startBlock": 23566311
+      "address": "0x11220097980b4D42b23B97af64842e8cE95b70ac",
+      "startBlock": 23701480
     },
     "SteleFundManagerNFT": {
-      "address": "0xfb21a63d4a10b91d408e5b61f38a1fc600aab0b2",
-      "startBlock": 23675927
-    },
-    "SteleFundGovernor": {
-      "address": "0x9F1e3a2C840d268f9bE9Ce0106498199f95C4D81",
-      "startBlock": 23566298
+      "address": "0xBe2732dfB5e35684234747f3cED88279495749e5",
+      "startBlock": 23701487
     }
   }
 }
