@@ -56,6 +56,7 @@ export function fundSnapshot(
   snapshot.manager = manager
   snapshot.investorCount = fund.investorCount
   snapshot.share = fund.share
+  snapshot.principal = fund.principal
   snapshot.amountUSD = fund.amountUSD
   snapshot.profitUSD = fund.profitUSD
   snapshot.profitRatio = fund.profitRatio
@@ -63,10 +64,10 @@ export function fundSnapshot(
   snapshot.tokensSymbols = fund.tokensSymbols
   snapshot.tokensDecimals = fund.tokensDecimals
   snapshot.tokensAmount = fund.tokensAmount
-  
+
   // Calculate USD amounts for each token
   let tokensAmountUSD: BigDecimal[] = []
-  
+
   for (let i = 0; i < fund.tokens.length; i++) {
     // This is simplified - in production you'd calculate actual token values
     tokensAmountUSD.push(ZERO_BD)
@@ -97,13 +98,13 @@ export function investorSnapshot(
   snapshot.fundId = fundId.toString()
   snapshot.manager = manager
   snapshot.investor = investor
-  // Note: InvestorSnapshot now has share, investmentUSD, amountUSD, profitUSD, profitRatio
+  // Note: InvestorSnapshot now has share, principal, amountUSD, profitUSD, profitRatio
   if (investorEntity.share) {
     snapshot.share = investorEntity.share!
   } else {
     snapshot.share = ZERO_BI
   }
-  snapshot.investmentUSD = investorEntity.investmentUSD
+  snapshot.principal = investorEntity.principal
   snapshot.amountUSD = investorEntity.amountUSD
   snapshot.profitUSD = investorEntity.profitUSD
   snapshot.profitRatio = investorEntity.profitRatio
@@ -137,20 +138,21 @@ export function fundWeeklySnapshot(
 ): void {
   let fund = Fund.load(fundId.toString())
   if (!fund) return
-  
+
   let timestamp = event.block.timestamp.toI32()
   let weekID = Math.floor(timestamp / (86400 * 7)) as i32 // explicit floor division
-  
+
   let snapshot = FundWeeklySnapshot.load(fundId.toString() + "-" + weekID.toString())
   if (snapshot == null) {
     snapshot = new FundWeeklySnapshot(fundId.toString() + "-" + weekID.toString())
   }
-  
+
   snapshot.timestamp = event.block.timestamp
   snapshot.fundId = fundId.toString()
   snapshot.manager = manager
   snapshot.investorCount = fund.investorCount
   snapshot.share = fund.share
+  snapshot.principal = fund.principal
   snapshot.amountUSD = fund.amountUSD
   snapshot.profitUSD = fund.profitUSD
   snapshot.profitRatio = fund.profitRatio
@@ -196,7 +198,7 @@ export function investorWeeklySnapshot(
   } else {
     snapshot.share = ZERO_BI
   }
-  snapshot.investmentUSD = investorEntity.investmentUSD
+  snapshot.principal = investorEntity.principal
   snapshot.amountUSD = investorEntity.amountUSD
   snapshot.profitUSD = investorEntity.profitUSD
   snapshot.profitRatio = investorEntity.profitRatio
@@ -230,20 +232,21 @@ export function fundMonthlySnapshot(
 ): void {
   let fund = Fund.load(fundId.toString())
   if (!fund) return
-  
+
   let timestamp = event.block.timestamp.toI32()
   let monthID = Math.floor(timestamp / (86400 * 30)) as i32 // explicit floor division
-  
+
   let snapshot = FundMonthlySnapshot.load(fundId.toString() + "-" + monthID.toString())
   if (snapshot == null) {
     snapshot = new FundMonthlySnapshot(fundId.toString() + "-" + monthID.toString())
   }
-  
+
   snapshot.timestamp = event.block.timestamp
   snapshot.fundId = fundId.toString()
   snapshot.manager = manager
   snapshot.investorCount = fund.investorCount
   snapshot.share = fund.share
+  snapshot.principal = fund.principal
   snapshot.amountUSD = fund.amountUSD
   snapshot.profitUSD = fund.profitUSD
   snapshot.profitRatio = fund.profitRatio
@@ -289,7 +292,7 @@ export function investorMonthlySnapshot(
   } else {
     snapshot.share = ZERO_BI
   }
-  snapshot.investmentUSD = investorEntity.investmentUSD
+  snapshot.principal = investorEntity.principal
   snapshot.amountUSD = investorEntity.amountUSD
   snapshot.profitUSD = investorEntity.profitUSD
   snapshot.profitRatio = investorEntity.profitRatio
