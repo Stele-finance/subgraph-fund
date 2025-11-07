@@ -175,6 +175,7 @@ type Fund @entity(immutable: false) {
   manager: Bytes!
   investorCount: BigInt!
   share: BigInt!
+  principal: BigDecimal! # Total invested principal in USD (cumulative deposits)
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -195,7 +196,7 @@ type Investor @entity(immutable: false) {
   investor: Bytes!
   isManager: Boolean!
   share: BigInt
-  investmentUSD: BigDecimal! # Total invested amount in USD (cumulative deposits)
+  principal: BigDecimal! # Total invested principal in USD (cumulative deposits)
   amountUSD: BigDecimal! # Current value in USD
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -242,6 +243,7 @@ type FundSnapshot @entity(immutable: false) {
   manager: Bytes!
   investorCount: BigInt!
   share: BigInt!
+  principal: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -259,6 +261,7 @@ type FundWeeklySnapshot @entity(immutable: false) {
   manager: Bytes!
   investorCount: BigInt!
   share: BigInt!
+  principal: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -276,6 +279,7 @@ type FundMonthlySnapshot @entity(immutable: false) {
   manager: Bytes!
   investorCount: BigInt!
   share: BigInt!
+  principal: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -293,7 +297,7 @@ type InvestorSnapshot @entity(immutable: false) {
   manager: Bytes!
   investor: Bytes!
   share: BigInt!
-  investmentUSD: BigDecimal!
+  principal: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -306,7 +310,7 @@ type InvestorWeeklySnapshot @entity(immutable: false) {
   manager: Bytes!
   investor: Bytes!
   share: BigInt!
-  investmentUSD: BigDecimal!
+  principal: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!
@@ -319,7 +323,7 @@ type InvestorMonthlySnapshot @entity(immutable: false) {
   manager: Bytes!
   investor: Bytes!
   share: BigInt!
-  investmentUSD: BigDecimal!
+  principal: BigDecimal!
   amountUSD: BigDecimal!
   profitUSD: BigDecimal!
   profitRatio: BigDecimal!

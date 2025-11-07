@@ -61,6 +61,7 @@ export function handleCreate(event: CreateEvent): void {
   fund.manager = event.params.manager
   fund.investorCount = ONE_BI
   fund.share = ZERO_BI
+  fund.principal = ZERO_BD
   fund.amountUSD = ZERO_BD
   fund.profitUSD = ZERO_BD
   fund.profitRatio = ZERO_BD
@@ -82,7 +83,7 @@ export function handleCreate(event: CreateEvent): void {
     investor.fundId = event.params.fundId.toString()
     investor.investor = event.params.manager
     investor.isManager = true
-    investor.investmentUSD = ZERO_BD
+    investor.principal = ZERO_BD
     investor.amountUSD = ZERO_BD
     investor.profitUSD = ZERO_BD
     investor.profitRatio = ZERO_BD
@@ -168,7 +169,7 @@ export function handleJoin(event: JoinEvent): void {
       investor.fundId = fundId.toString()
       investor.investor = event.params.investor
       investor.isManager = false
-      investor.investmentUSD = ZERO_BD
+      investor.principal = ZERO_BD
       investor.amountUSD = ZERO_BD
       investor.profitUSD = ZERO_BD
       investor.profitRatio = ZERO_BD
