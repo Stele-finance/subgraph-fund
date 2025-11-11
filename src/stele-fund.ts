@@ -663,11 +663,18 @@ export function handleWithdraw(event: WithdrawEvent): void {
 
   // Update investor share and portfolio
   let investor = Investor.load(investorID)
+  let withdrawnPrincipalAmount = ZERO_BD
   if (investor !== null && fundShare !== null) {
+    // Calculate withdrawn principal amount before updating investor
+    let investorOriginalPrincipal = investor.principal
+
     // Reduce principal proportionally to withdrawal
     investor.principal = investor.principal.times(
       BigDecimal.fromString("1").minus(withdrawalPercentage)
     )
+
+    // Calculate actual withdrawn amount
+    withdrawnPrincipalAmount = investorOriginalPrincipal.minus(investor.principal)
 
     investor.share = event.params.investorShare
     investor.updatedAtTimestamp = event.block.timestamp
@@ -754,10 +761,8 @@ export function handleWithdraw(event: WithdrawEvent): void {
   if (fund !== null) {
     let previousAmountUSD = fund.amountUSD
 
-    // Reduce principal proportionally to withdrawal
-    fund.principal = fund.principal.times(
-      BigDecimal.fromString("1").minus(withdrawalPercentage)
-    )
+    // Reduce principal by the actual withdrawn amount from the investor
+    fund.principal = fund.principal.minus(withdrawnPrincipalAmount)
 
     // Update share with FundShare totalShare (USDC raw amount)
     fund.share = event.params.fundShare
