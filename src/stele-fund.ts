@@ -55,34 +55,7 @@ export function handleDeposit(event: DepositEvent): void {
   entity.token = event.params.token
   entity.investorShare = event.params.investorShare
   entity.fundShare = event.params.fundShare
-  
-  // Update FundShare entity
-  let fundShareId = event.params.fundId.toString()
-  let fundShare = FundShare.load(fundShareId)
-  if (fundShare === null) {
-    fundShare = new FundShare(fundShareId)
-    fundShare.fundId = event.params.fundId
-  }
-  fundShare.totalShare = event.params.fundShare
-  fundShare.blockNumber = event.block.number
-  fundShare.blockTimestamp = event.block.timestamp
-  fundShare.transactionHash = event.transaction.hash
-  fundShare.save()
 
-  // Update InvestorShare entity
-  let investorShareId = getInvestorID(event.params.fundId, event.params.investor)
-  let investorShare = InvestorShare.load(investorShareId)
-  if (investorShare === null) {
-    investorShare = new InvestorShare(investorShareId)
-    investorShare.fundId = event.params.fundId
-    investorShare.investor = event.params.investor
-  }
-  investorShare.share = event.params.investorShare
-  investorShare.blockNumber = event.block.number
-  investorShare.blockTimestamp = event.block.timestamp
-  investorShare.transactionHash = event.transaction.hash
-  investorShare.save()
-  
   // Convert raw amounts to formatted amounts
   let tokenDecimals = fetchTokenDecimals(event.params.token, event.block.timestamp)
   if (tokenDecimals !== null) {
@@ -116,242 +89,276 @@ export function handleDeposit(event: DepositEvent): void {
   const fundId = event.params.fundId
   const managerAddress = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
     .try_manager(fundId)
-  
-  if (!managerAddress.reverted) {
-    const decimals = fetchTokenDecimals(event.params.token, event.block.timestamp)
-    if (decimals === null) {
-      log.debug('the decimals on {} token was null', [event.params.token.toHexString()])
-      return
+
+  if (managerAddress.reverted) {
+    log.warning('[DEPOSIT] Failed to get manager for fundId: {}, skipping state updates', [fundId.toString()])
+    return
+  }
+
+  const decimals = fetchTokenDecimals(event.params.token, event.block.timestamp)
+  if (decimals === null) {
+    log.warning('[DEPOSIT] Failed to get decimals for token: {}, skipping state updates', [event.params.token.toHexString()])
+    return
+  }
+
+  const tokenPriceETH = getCachedTokenPriceETH(event.params.token, event.block.timestamp)
+  if (tokenPriceETH === null) {
+    log.warning('[DEPOSIT] Failed to get price for token: {}, skipping state updates', [event.params.token.toHexString()])
+    return
+  }
+
+  const ethPriceInUSD = getCachedEthPriceUSD(event.block.timestamp)
+
+  // Use the formatted amount from entity.amount instead of raw amount
+  const amountDecimal = entity.amount
+  const fundAmountDecimal = entity.fundAmount
+  const amountETH = amountDecimal.times(tokenPriceETH)
+  const amountUSD = amountETH.times(ethPriceInUSD)
+
+  // Update FundShare entity (moved here to ensure consistency with principal updates)
+  let fundShareId = event.params.fundId.toString()
+  let fundShare = FundShare.load(fundShareId)
+  if (fundShare === null) {
+    fundShare = new FundShare(fundShareId)
+    fundShare.fundId = event.params.fundId
+  }
+  fundShare.totalShare = event.params.fundShare
+  fundShare.blockNumber = event.block.number
+  fundShare.blockTimestamp = event.block.timestamp
+  fundShare.transactionHash = event.transaction.hash
+  fundShare.save()
+
+  // Update InvestorShare entity (moved here to ensure consistency with principal updates)
+  let investorShareId = getInvestorID(event.params.fundId, event.params.investor)
+  let investorShare = InvestorShare.load(investorShareId)
+  if (investorShare === null) {
+    investorShare = new InvestorShare(investorShareId)
+    investorShare.fundId = event.params.fundId
+    investorShare.investor = event.params.investor
+  }
+  investorShare.share = event.params.investorShare
+  investorShare.blockNumber = event.block.number
+  investorShare.blockTimestamp = event.block.timestamp
+  investorShare.transactionHash = event.transaction.hash
+  investorShare.save()
+
+  // Update investor
+  const investorID = getInvestorID(fundId, event.params.investor)
+  let investor = Investor.load(investorID)
+  if (investor !== null) {
+    // Accumulate principal with deposit amount
+    investor.principal = investor.principal.plus(amountUSD)
+
+    // Update investor share from InvestorShare entity
+    let investorShareLoaded = InvestorShare.load(investorShareId)
+    if (investorShareLoaded !== null) {
+      investor.share = investorShareLoaded.share
     }
 
-    const tokenPriceETH = getCachedTokenPriceETH(event.params.token, event.block.timestamp)
-    if (tokenPriceETH === null) return
-    const ethPriceInUSD = getCachedEthPriceUSD(event.block.timestamp)
+    // Calculate investor's current portfolio based on their share
+    let fundInfoContract = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
+    let tokensResult = fundInfoContract.try_getFundTokens(fundId)
 
-    // Use the formatted amount from entity.amount instead of raw amount
-    const amountDecimal = entity.amount
-    const fundAmountDecimal = entity.fundAmount
-    const amountETH = amountDecimal.times(tokenPriceETH)
-    const amountUSD = amountETH.times(ethPriceInUSD)
+    if (!tokensResult.reverted && fundShare !== null && fundShare.totalShare.gt(ZERO_BI)) {
+      let contractTokens = tokensResult.value
+      let investorRatio = BigDecimal.fromString(investor.share ? investor.share!.toString() : "0")
+        .div(BigDecimal.fromString(fundShare.totalShare.toString()))
 
-    // Update investor
-    const investorID = getInvestorID(fundId, event.params.investor)
-    let investor = Investor.load(investorID)
-    if (investor !== null) {
-      // Accumulate principal with deposit amount
-      investor.principal = investor.principal.plus(amountUSD)
+      let tokens: Array<Bytes> = []
+      let tokensSymbols: Array<string> = []
+      let tokensDecimals: Array<BigInt> = []
+      let tokensAmount: Array<BigDecimal> = []
+      let totalAmountUSD = ZERO_BD
 
-      // Update investor share from InvestorShare entity
-      let investorShare = InvestorShare.load(investorShareId)
-      if (investorShare !== null) {
-        investor.share = investorShare.share
-      }
+      for (let i = 0; i < contractTokens.length; i++) {
+        let token = contractTokens[i]
+        let tokenAddress = Address.fromBytes(token.token)
+        let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
 
-      // Calculate investor's current portfolio based on their share
-      let fundInfoContract = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
-      let tokensResult = fundInfoContract.try_getFundTokens(fundId)
+        if (tokenDecimals !== null) {
+          let decimalDivisor = exponentToBigDecimal(tokenDecimals)
+          let fundTokenAmount = BigDecimal.fromString(token.amount.toString()).div(decimalDivisor)
+          let investorTokenAmount = fundTokenAmount.times(investorRatio)
 
-      if (!tokensResult.reverted && fundShare !== null && fundShare.totalShare.gt(ZERO_BI)) {
-        let contractTokens = tokensResult.value
-        let investorRatio = BigDecimal.fromString(investor.share ? investor.share!.toString() : "0")
-          .div(BigDecimal.fromString(fundShare.totalShare.toString()))
+          if (investorTokenAmount.gt(ZERO_BD)) {
+            tokens.push(token.token)
+            tokensSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
+            tokensDecimals.push(tokenDecimals)
+            tokensAmount.push(investorTokenAmount)
 
-        let tokens: Array<Bytes> = []
-        let tokensSymbols: Array<string> = []
-        let tokensDecimals: Array<BigInt> = []
-        let tokensAmount: Array<BigDecimal> = []
-        let totalAmountUSD = ZERO_BD
-
-        for (let i = 0; i < contractTokens.length; i++) {
-          let token = contractTokens[i]
-          let tokenAddress = Address.fromBytes(token.token)
-          let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
-
-          if (tokenDecimals !== null) {
-            let decimalDivisor = exponentToBigDecimal(tokenDecimals)
-            let fundTokenAmount = BigDecimal.fromString(token.amount.toString()).div(decimalDivisor)
-            let investorTokenAmount = fundTokenAmount.times(investorRatio)
-
-            if (investorTokenAmount.gt(ZERO_BD)) {
-              tokens.push(token.token)
-              tokensSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
-              tokensDecimals.push(tokenDecimals)
-              tokensAmount.push(investorTokenAmount)
-
-              // Calculate USD value
-              let tokenPriceETH = getCachedTokenPriceETH(tokenAddress, event.block.timestamp)
-              if (tokenPriceETH !== null) {
-                let valueETH = investorTokenAmount.times(tokenPriceETH)
-                totalAmountUSD = totalAmountUSD.plus(valueETH.times(ethPriceInUSD))
-              }
-            }
-          }
-        }
-
-        investor.amountUSD = totalAmountUSD
-
-        // Calculate profit: current USD value - principal (total invested)
-        if (investor.principal.gt(ZERO_BD)) {
-          investor.profitUSD = totalAmountUSD.minus(investor.principal)
-          investor.profitRatio = investor.profitUSD.div(investor.principal)
-        } else {
-          investor.profitUSD = ZERO_BD
-          investor.profitRatio = ZERO_BD
-        }
-      }
-
-      investor.updatedAtTimestamp = event.block.timestamp
-      investor.save()
-    }
-
-    // Update fund
-    let fund = Fund.load(fundId.toString())
-    if (fund !== null) {
-      let previousAmountUSD = fund.amountUSD
-
-      // Update share with FundShare totalShare (USDC raw amount)
-      fund.share = event.params.fundShare
-
-      // Accumulate principal with deposited amount in USD
-      fund.principal = fund.principal.plus(amountUSD)
-
-      // Calculate current fund portfolio value from contract (real-time TVL)
-      let fundInfoContract = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
-      let tokensResult = fundInfoContract.try_getFundTokens(fundId)
-
-      if (!tokensResult.reverted) {
-        let contractTokens = tokensResult.value
-        let totalFundValueUSD = ZERO_BD
-
-        // Calculate total fund value in USD
-        for (let i = 0; i < contractTokens.length; i++) {
-          let token = contractTokens[i]
-          let tokenAddress = Address.fromBytes(token.token)
-          let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
-
-          if (tokenDecimals !== null) {
-            let decimalDivisor = exponentToBigDecimal(tokenDecimals)
-            let tokenAmount = BigDecimal.fromString(token.amount.toString()).div(decimalDivisor)
-
-            // Get USD value
+            // Calculate USD value
             let tokenPriceETH = getCachedTokenPriceETH(tokenAddress, event.block.timestamp)
             if (tokenPriceETH !== null) {
-              let valueETH = tokenAmount.times(tokenPriceETH)
-              totalFundValueUSD = totalFundValueUSD.plus(valueETH.times(ethPriceInUSD))
+              let valueETH = investorTokenAmount.times(tokenPriceETH)
+              totalAmountUSD = totalAmountUSD.plus(valueETH.times(ethPriceInUSD))
             }
           }
         }
+      }
 
-        fund.amountUSD = totalFundValueUSD
+      investor.amountUSD = totalAmountUSD
 
-        // Calculate profit: current TVL - principal
-        fund.profitUSD = totalFundValueUSD.minus(fund.principal)
+      // Calculate profit: current USD value - principal (total invested)
+      if (investor.principal.gt(ZERO_BD)) {
+        investor.profitUSD = totalAmountUSD.minus(investor.principal)
+        investor.profitRatio = investor.profitUSD.div(investor.principal)
+      } else {
+        investor.profitUSD = ZERO_BD
+        investor.profitRatio = ZERO_BD
+      }
+    }
 
-        // Calculate profit ratio: profit / principal
-        if (fund.principal.gt(ZERO_BD)) {
-          fund.profitRatio = fund.profitUSD.div(fund.principal)
-        } else {
-          fund.profitRatio = ZERO_BD
+    investor.updatedAtTimestamp = event.block.timestamp
+    investor.save()
+  }
+
+  // Update fund
+  let fund = Fund.load(fundId.toString())
+  if (fund !== null) {
+    let previousAmountUSD = fund.amountUSD
+
+    // Update share with FundShare totalShare (USDC raw amount)
+    fund.share = event.params.fundShare
+
+    // Accumulate principal with deposited amount in USD
+    fund.principal = fund.principal.plus(amountUSD)
+
+    // Calculate current fund portfolio value from contract (real-time TVL)
+    let fundInfoContract = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
+    let tokensResult = fundInfoContract.try_getFundTokens(fundId)
+
+    if (!tokensResult.reverted) {
+      let contractTokens = tokensResult.value
+      let totalFundValueUSD = ZERO_BD
+
+      // Calculate total fund value in USD
+      for (let i = 0; i < contractTokens.length; i++) {
+        let token = contractTokens[i]
+        let tokenAddress = Address.fromBytes(token.token)
+        let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
+
+        if (tokenDecimals !== null) {
+          let decimalDivisor = exponentToBigDecimal(tokenDecimals)
+          let tokenAmount = BigDecimal.fromString(token.amount.toString()).div(decimalDivisor)
+
+          // Get USD value
+          let tokenPriceETH = getCachedTokenPriceETH(tokenAddress, event.block.timestamp)
+          if (tokenPriceETH !== null) {
+            let valueETH = tokenAmount.times(tokenPriceETH)
+            totalFundValueUSD = totalFundValueUSD.plus(valueETH.times(ethPriceInUSD))
+          }
         }
       }
 
-      fund.updatedAtTimestamp = event.block.timestamp
-      
-      // Add token to fund if not already present
-      let tokenAddress = event.params.token
-      let tokenIndex = -1
-      for (let i = 0; i < fund.tokens.length; i++) {
-        if (fund.tokens[i].equals(tokenAddress)) {
-          tokenIndex = i
+      fund.amountUSD = totalFundValueUSD
+
+      // Calculate profit: current TVL - principal
+      fund.profitUSD = totalFundValueUSD.minus(fund.principal)
+
+      // Calculate profit ratio: profit / principal
+      if (fund.principal.gt(ZERO_BD)) {
+        fund.profitRatio = fund.profitUSD.div(fund.principal)
+      } else {
+        fund.profitRatio = ZERO_BD
+      }
+    }
+
+    fund.updatedAtTimestamp = event.block.timestamp
+
+    // Add token to fund if not already present
+    let tokenAddress = event.params.token
+    let tokenIndex = -1
+    for (let i = 0; i < fund.tokens.length; i++) {
+      if (fund.tokens[i].equals(tokenAddress)) {
+        tokenIndex = i
+        break
+      }
+    }
+
+    if (tokenIndex === -1) {
+      // New token
+      let tokens = fund.tokens
+      let symbols = fund.tokensSymbols
+      let decimalsArray = fund.tokensDecimals
+      let amounts = fund.tokensAmount
+
+      tokens.push(tokenAddress)
+      symbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
+      decimalsArray.push(decimals)
+      amounts.push(fundAmountDecimal)
+
+      fund.tokens = tokens
+      fund.tokensSymbols = symbols
+      fund.tokensDecimals = decimalsArray
+      fund.tokensAmount = amounts
+    } else {
+      // Existing token
+      let amounts = fund.tokensAmount
+      amounts[tokenIndex] = amounts[tokenIndex].plus(fundAmountDecimal)
+      fund.tokensAmount = amounts
+    }
+
+    // Add manager fee to fund's fee tokens if feeAmount > 0
+    if (event.params.feeAmount.gt(ZERO_BI) && tokenDecimals !== null) {
+      let tokenDecimalDivisor = exponentToBigDecimal(tokenDecimals)
+      let managerFeeDecimal = BigDecimal.fromString(event.params.feeAmount.toString())
+        .div(tokenDecimalDivisor)
+
+      // Check if fee token already exists
+      let feeTokenIndex = -1
+      for (let i = 0; i < fund.feeTokens.length; i++) {
+        if (fund.feeTokens[i].equals(tokenAddress)) {
+          feeTokenIndex = i
           break
         }
       }
-      
-      if (tokenIndex === -1) {
-        // New token
-        let tokens = fund.tokens
-        let symbols = fund.tokensSymbols
-        let decimalsArray = fund.tokensDecimals
-        let amounts = fund.tokensAmount
-        
-        tokens.push(tokenAddress)
-        symbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
-        decimalsArray.push(decimals)
-        amounts.push(fundAmountDecimal)
-        
-        fund.tokens = tokens
-        fund.tokensSymbols = symbols
-        fund.tokensDecimals = decimalsArray
-        fund.tokensAmount = amounts
+
+      if (feeTokenIndex === -1) {
+        // New fee token
+        let feeTokens = fund.feeTokens
+        let feeSymbols = fund.feeSymbols
+        let feeAmounts = fund.feeTokensAmount
+
+        feeTokens.push(tokenAddress)
+        feeSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
+        feeAmounts.push(managerFeeDecimal)
+
+        fund.feeTokens = feeTokens
+        fund.feeSymbols = feeSymbols
+        fund.feeTokensAmount = feeAmounts
       } else {
-        // Existing token
-        let amounts = fund.tokensAmount
-        amounts[tokenIndex] = amounts[tokenIndex].plus(fundAmountDecimal)
-        fund.tokensAmount = amounts
-      }
-      
-      // Add manager fee to fund's fee tokens if feeAmount > 0
-      if (event.params.feeAmount.gt(ZERO_BI) && tokenDecimals !== null) {
-        let tokenDecimalDivisor = exponentToBigDecimal(tokenDecimals)
-        let managerFeeDecimal = BigDecimal.fromString(event.params.feeAmount.toString())
-          .div(tokenDecimalDivisor)
-        
-        // Check if fee token already exists
-        let feeTokenIndex = -1
-        for (let i = 0; i < fund.feeTokens.length; i++) {
-          if (fund.feeTokens[i].equals(tokenAddress)) {
-            feeTokenIndex = i
-            break
-          }
-        }
-        
-        if (feeTokenIndex === -1) {
-          // New fee token
-          let feeTokens = fund.feeTokens
-          let feeSymbols = fund.feeSymbols
-          let feeAmounts = fund.feeTokensAmount
-          
-          feeTokens.push(tokenAddress)
-          feeSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
-          feeAmounts.push(managerFeeDecimal)
-          
-          fund.feeTokens = feeTokens
-          fund.feeSymbols = feeSymbols
-          fund.feeTokensAmount = feeAmounts
-        } else {
-          // Existing fee token
-          let feeAmounts = fund.feeTokensAmount
-          feeAmounts[feeTokenIndex] = feeAmounts[feeTokenIndex].plus(managerFeeDecimal)
-          fund.feeTokensAmount = feeAmounts
-        }
-      }
-
-      fund.save()
-
-      // Update Info totalAmountUSD by delta
-      let deltaUSD = fund.amountUSD.minus(previousAmountUSD)
-      let info = Info.load(Bytes.fromHexString(STELE_FUND_INFO_ADDRESS))
-      if (info) {
-        info.totalAmountUSD = info.totalAmountUSD.plus(deltaUSD)
-        info.save()
+        // Existing fee token
+        let feeAmounts = fund.feeTokensAmount
+        feeAmounts[feeTokenIndex] = feeAmounts[feeTokenIndex].plus(managerFeeDecimal)
+        fund.feeTokensAmount = feeAmounts
       }
     }
 
-    // Get manager address for snapshots
-    const managerAddressForSnapshot = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
-      .try_manager(event.params.fundId)
+    fund.save()
 
-    if (!managerAddressForSnapshot.reverted) {
-      infoSnapshot(event)
-      infoWeeklySnapshot(event)
-      infoMonthlySnapshot(event)
-      fundSnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
-      fundWeeklySnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
-      fundMonthlySnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
-      investorSnapshot(event.params.fundId, managerAddressForSnapshot.value, event.params.investor, event)
-      investorWeeklySnapshot(event.params.fundId, managerAddressForSnapshot.value, event.params.investor, event)
-      investorMonthlySnapshot(event.params.fundId, managerAddressForSnapshot.value, event.params.investor, event)
+    // Update Info totalAmountUSD by delta
+    let deltaUSD = fund.amountUSD.minus(previousAmountUSD)
+    let info = Info.load(Bytes.fromHexString(STELE_FUND_INFO_ADDRESS))
+    if (info) {
+      info.totalAmountUSD = info.totalAmountUSD.plus(deltaUSD)
+      info.save()
     }
+  }
+
+  // Get manager address for snapshots
+  const managerAddressForSnapshot = SteleFundInfo.bind(Address.fromString(STELE_FUND_INFO_ADDRESS))
+    .try_manager(event.params.fundId)
+
+  if (!managerAddressForSnapshot.reverted) {
+    infoSnapshot(event)
+    infoWeeklySnapshot(event)
+    infoMonthlySnapshot(event)
+    fundSnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
+    fundWeeklySnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
+    fundMonthlySnapshot(event.params.fundId, managerAddressForSnapshot.value, event)
+    investorSnapshot(event.params.fundId, managerAddressForSnapshot.value, event.params.investor, event)
+    investorWeeklySnapshot(event.params.fundId, managerAddressForSnapshot.value, event.params.investor, event)
+    investorMonthlySnapshot(event.params.fundId, managerAddressForSnapshot.value, event.params.investor, event)
   }
 }
 
