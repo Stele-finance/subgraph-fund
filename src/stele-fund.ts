@@ -426,36 +426,14 @@ export function handleSwap(event: SwapEvent): void {
       }
     }
 
-    // Update tokenIn balance (decrease)
-    if (tokenInIndex !== -1) {
-      let amounts = fund.tokensAmount
-      amounts[tokenInIndex] = amounts[tokenInIndex].minus(amountIn)
-      if (amounts[tokenInIndex].le(ZERO_BD)) {
-        // Remove token if balance is zero
-        let tokens = fund.tokens
-        let symbols = fund.tokensSymbols
-        let decimalsArray = fund.tokensDecimals
-        
-        tokens.splice(tokenInIndex, 1)
-        symbols.splice(tokenInIndex, 1)
-        decimalsArray.splice(tokenInIndex, 1)
-        amounts.splice(tokenInIndex, 1)
-        
-        fund.tokens = tokens
-        fund.tokensSymbols = symbols
-        fund.tokensDecimals = decimalsArray
-      }
-      fund.tokensAmount = amounts
-    }
-
-    // Update tokenOut balance (increase)
+    // Update tokenOut balance first (before modifying tokenIn)
     if (tokenOutIndex === -1) {
       // New token
       let tokens = fund.tokens
       let symbols = fund.tokensSymbols
       let decimalsArray = fund.tokensDecimals
       let amounts = fund.tokensAmount
-      
+
       tokens.push(event.params.tokenOut)
       symbols.push(fetchTokenSymbol(event.params.tokenOut, event.block.timestamp))
       if (tokenOutDecimals !== null) {
@@ -464,7 +442,7 @@ export function handleSwap(event: SwapEvent): void {
         decimalsArray.push(BigInt.fromI32(18)) // default to 18 decimals
       }
       amounts.push(amountOut)
-      
+
       fund.tokens = tokens
       fund.tokensSymbols = symbols
       fund.tokensDecimals = decimalsArray
@@ -473,6 +451,28 @@ export function handleSwap(event: SwapEvent): void {
       // Existing token
       let amounts = fund.tokensAmount
       amounts[tokenOutIndex] = amounts[tokenOutIndex].plus(amountOut)
+      fund.tokensAmount = amounts
+    }
+
+    // Update tokenIn balance (decrease) - do this AFTER updating tokenOut
+    if (tokenInIndex !== -1) {
+      let amounts = fund.tokensAmount
+      amounts[tokenInIndex] = amounts[tokenInIndex].minus(amountIn)
+      if (amounts[tokenInIndex].le(ZERO_BD)) {
+        // Remove token if balance is zero
+        let tokens = fund.tokens
+        let symbols = fund.tokensSymbols
+        let decimalsArray = fund.tokensDecimals
+
+        tokens.splice(tokenInIndex, 1)
+        symbols.splice(tokenInIndex, 1)
+        decimalsArray.splice(tokenInIndex, 1)
+        amounts.splice(tokenInIndex, 1)
+
+        fund.tokens = tokens
+        fund.tokensSymbols = symbols
+        fund.tokensDecimals = decimalsArray
+      }
       fund.tokensAmount = amounts
     }
 
