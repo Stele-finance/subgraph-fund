@@ -629,22 +629,28 @@ export function handleWithdraw(event: WithdrawEvent): void {
   )
   entity.fundId = event.params.fundId
   entity.investor = event.params.investor
-  
+
   const fundId = event.params.fundId
   const investorID = getInvestorID(fundId, event.params.investor)
-  
+
   // Get current (pre-withdrawal) shares
   let fundShare = FundShare.load(fundId.toString())
   let investorShare = InvestorShare.load(investorID)
-  
+
   // Use percentage directly from event parameters
   // Contract uses basis points: 1 = 0.01%, 100 = 1%, 10000 = 100%
   let withdrawalPercentage = BigDecimal.fromString(event.params.percentage.toString())
     .div(BigDecimal.fromString("10000"))
-  
+
   entity.percentage = withdrawalPercentage
   entity.amountUSD = ZERO_BD // Will be calculated based on actual withdrawn tokens
-  
+
+  // Initialize token arrays
+  entity.tokens = []
+  entity.tokensSymbols = []
+  entity.tokensDecimals = []
+  entity.tokensAmount = []
+
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
   entity.transactionHash = event.transaction.hash
@@ -849,26 +855,44 @@ export function handleWithdraw(event: WithdrawEvent): void {
     let totalWithdrawnUSD = ZERO_BD
     let totalWithdrawnETH = ZERO_BD
     const ethPriceInUSD = getCachedEthPriceUSD(event.block.timestamp)
-    
+
+    let withdrawnTokens: Array<Bytes> = []
+    let withdrawnTokensSymbols: Array<string> = []
+    let withdrawnTokensDecimals: Array<BigInt> = []
+    let withdrawnTokensAmount: Array<BigDecimal> = []
+
     // Use pre-withdrawal data to calculate withdrawn amounts
     for (let i = 0; i < preWithdrawTokens.length; i++) {
       let tokenAddress = Address.fromBytes(preWithdrawTokens[i])
       // Calculate withdrawn amount: preWithdrawAmount × percentage
       let withdrawnAmount = preWithdrawAmounts[i].times(withdrawalPercentage)
-      
-      // Calculate ETH and USD value of withdrawn tokens
-      let tokenPriceETH = getCachedTokenPriceETH(tokenAddress, event.block.timestamp)
-      if (tokenPriceETH !== null) {
-        let valueETH = withdrawnAmount.times(tokenPriceETH)
-        totalWithdrawnETH = totalWithdrawnETH.plus(valueETH)
-        totalWithdrawnUSD = totalWithdrawnUSD.plus(valueETH.times(ethPriceInUSD))
+
+      if (withdrawnAmount.gt(ZERO_BD)) {
+        // Store token info
+        withdrawnTokens.push(preWithdrawTokens[i])
+        withdrawnTokensSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
+        let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
+        withdrawnTokensDecimals.push(tokenDecimals !== null ? tokenDecimals : BigInt.fromI32(18))
+        withdrawnTokensAmount.push(withdrawnAmount)
+
+        // Calculate ETH and USD value of withdrawn tokens
+        let tokenPriceETH = getCachedTokenPriceETH(tokenAddress, event.block.timestamp)
+        if (tokenPriceETH !== null) {
+          let valueETH = withdrawnAmount.times(tokenPriceETH)
+          totalWithdrawnETH = totalWithdrawnETH.plus(valueETH)
+          totalWithdrawnUSD = totalWithdrawnUSD.plus(valueETH.times(ethPriceInUSD))
+        }
       }
     }
-    
-    // Update the Withdraw entity with calculated USD amount
+
+    // Update the Withdraw entity with calculated USD amount and token details
     entity.amountUSD = totalWithdrawnUSD
+    entity.tokens = withdrawnTokens
+    entity.tokensSymbols = withdrawnTokensSymbols
+    entity.tokensDecimals = withdrawnTokensDecimals
+    entity.tokensAmount = withdrawnTokensAmount
     entity.save()
-    
+
     // Update investor's principal (subtract withdrawn amount)
     if (investor !== null) {
       // Note: principalUSD was removed from Investor schema

@@ -35,6 +35,10 @@ type Withdraw @entity(immutable: true) {
   investor: Bytes! # address
   percentage: BigDecimal! # withdrawal percentage
   amountUSD: BigDecimal! # USD value of the withdrawal
+  tokens: [Bytes!]! # withdrawn token addresses
+  tokensSymbols: [String!]! # token symbols
+  tokensDecimals: [BigInt!]! # token decimals
+  tokensAmount: [BigDecimal!]! # withdrawn amounts per token (formatted)
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
