@@ -633,9 +633,13 @@ export function handleWithdraw(event: WithdrawEvent): void {
   const fundId = event.params.fundId
   const investorID = getInvestorID(fundId, event.params.investor)
 
-  // Get current (pre-withdrawal) shares
+  // Get current (pre-withdrawal) shares - SAVE THESE BEFORE UPDATING!
   let fundShare = FundShare.load(fundId.toString())
   let investorShare = InvestorShare.load(investorID)
+
+  // Save pre-withdrawal share values
+  let preWithdrawFundTotalShare = fundShare !== null ? fundShare.totalShare : ZERO_BI
+  let preWithdrawInvestorShare = investorShare !== null ? investorShare.share : ZERO_BI
 
   // Use percentage directly from event parameters
   // Contract uses basis points: 1 = 0.01%, 100 = 1%, 10000 = 100%
@@ -759,15 +763,25 @@ export function handleWithdraw(event: WithdrawEvent): void {
     investor.save()
   }
 
-  // Load Fund entity first to get pre-withdrawal data for calculation
+  // Calculate investor's pre-withdrawal token amounts for withdrawal tracking
+  let preWithdrawInvestorTokens: Array<Bytes> = []
+  let preWithdrawInvestorAmounts: Array<BigDecimal> = []
+
+  // Get fund tokens to calculate investor's portion
   let fund = Fund.load(fundId.toString())
-  
-  // Store pre-withdrawal data for withdrawal amount calculation
-  let preWithdrawTokens: Array<Bytes> = []
-  let preWithdrawAmounts: Array<BigDecimal> = []
-  if (fund !== null) {
-    preWithdrawTokens = fund.tokens
-    preWithdrawAmounts = fund.tokensAmount
+  if (fund !== null && preWithdrawFundTotalShare.gt(ZERO_BI)) {
+    // Calculate investor's share ratio BEFORE withdrawal (using saved pre-withdrawal values)
+    let investorShareRatio = BigDecimal.fromString(preWithdrawInvestorShare.toString())
+      .div(BigDecimal.fromString(preWithdrawFundTotalShare.toString()))
+
+    // Calculate investor's token amounts (fund tokens × investor ratio)
+    for (let i = 0; i < fund.tokens.length; i++) {
+      let investorTokenAmount = fund.tokensAmount[i].times(investorShareRatio)
+      if (investorTokenAmount.gt(ZERO_BD)) {
+        preWithdrawInvestorTokens.push(fund.tokens[i])
+        preWithdrawInvestorAmounts.push(investorTokenAmount)
+      }
+    }
   }
   
   // Update Fund entity with actual contract data (post-withdrawal)
@@ -850,8 +864,8 @@ export function handleWithdraw(event: WithdrawEvent): void {
     }
   }
   
-  // Calculate withdrawn amount USD based on pre-withdrawal tokens
-  if (withdrawalPercentage.gt(ZERO_BD) && preWithdrawTokens.length > 0) {
+  // Calculate withdrawn amount USD based on investor's pre-withdrawal tokens
+  if (withdrawalPercentage.gt(ZERO_BD) && preWithdrawInvestorTokens.length > 0) {
     let totalWithdrawnUSD = ZERO_BD
     let totalWithdrawnETH = ZERO_BD
     const ethPriceInUSD = getCachedEthPriceUSD(event.block.timestamp)
@@ -861,15 +875,15 @@ export function handleWithdraw(event: WithdrawEvent): void {
     let withdrawnTokensDecimals: Array<BigInt> = []
     let withdrawnTokensAmount: Array<BigDecimal> = []
 
-    // Use pre-withdrawal data to calculate withdrawn amounts
-    for (let i = 0; i < preWithdrawTokens.length; i++) {
-      let tokenAddress = Address.fromBytes(preWithdrawTokens[i])
-      // Calculate withdrawn amount: preWithdrawAmount × percentage
-      let withdrawnAmount = preWithdrawAmounts[i].times(withdrawalPercentage)
+    // Calculate withdrawn amounts: investor's token amount × withdrawal percentage
+    for (let i = 0; i < preWithdrawInvestorTokens.length; i++) {
+      let tokenAddress = Address.fromBytes(preWithdrawInvestorTokens[i])
+      // Calculate withdrawn amount: investor's preWithdraw token amount × percentage
+      let withdrawnAmount = preWithdrawInvestorAmounts[i].times(withdrawalPercentage)
 
       if (withdrawnAmount.gt(ZERO_BD)) {
         // Store token info
-        withdrawnTokens.push(preWithdrawTokens[i])
+        withdrawnTokens.push(preWithdrawInvestorTokens[i])
         withdrawnTokensSymbols.push(fetchTokenSymbol(tokenAddress, event.block.timestamp))
         let tokenDecimals = fetchTokenDecimals(tokenAddress, event.block.timestamp)
         withdrawnTokensDecimals.push(tokenDecimals !== null ? tokenDecimals : BigInt.fromI32(18))
